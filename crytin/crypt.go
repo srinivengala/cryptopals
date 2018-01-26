@@ -3,6 +3,7 @@ package crytin
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"regexp"
 )
 
 // FromHex : Get bytes from hex encoded string
@@ -39,4 +40,10 @@ func XOR(b1 []byte, b2 []byte) ([]byte, error) {
 		b[i] = b1[i] ^ b2[i%b2len]
 	}
 	return b, nil
+}
+
+// ToSafeString : Convert to safe printable string
+func ToSafeString(b []byte) string {
+	reg, _ := regexp.Compile("[^a-zA-Z0-9 ]")
+	return reg.ReplaceAllString(string(b), ".")
 }

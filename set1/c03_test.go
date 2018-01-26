@@ -24,7 +24,7 @@ func TestAttackSingleXOR(t *testing.T) {
 	}
 
 	// using ASCIIScore1
-	pb1, secret1 := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore1, false)
+	pb1, secret1, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore1, false)
 
 	if len(pb1) == 0 {
 		t.Error("Could not find XOR byte")
@@ -34,7 +34,7 @@ func TestAttackSingleXOR(t *testing.T) {
 	t.Log("Secret byte is : ", string(secret1))
 
 	// using ASCIIScore2
-	pb2, secret2 := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore2, false)
+	pb2, secret2, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore2, false)
 
 	if len(pb2) == 0 {
 		t.Error("Could not find the XOR byte")
@@ -44,7 +44,7 @@ func TestAttackSingleXOR(t *testing.T) {
 	t.Log("Secret byte is : ", string(secret2))
 
 	// using ASCIIScore3
-	pb3, secret3 := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore3, false)
+	pb3, secret3, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore3, false)
 
 	if len(pb3) == 0 {
 		t.Error("Could not find the XOR byte")

@@ -1,8 +1,8 @@
 package crytin
 
 import (
+	"bytes"
 	"fmt"
-	"regexp"
 )
 
 //Herbert S. Zim, in his classic introductory cryptography text "Codes and Secret Writing",
@@ -14,6 +14,7 @@ import (
 //the letters are: etaoinshrdlcumwfgypbvkjxqz
 //Lewand's ordering differs slightly from others,
 //such as Cornell University Math Explorer's Project, which produced a table after measuring 40,000 words.
+// http://www.math.cornell.edu/~mec/
 
 // ASCIIScore1 : reward frequent ascii chars
 func ASCIIScore1(pt []byte) int {
@@ -90,13 +91,29 @@ func ASCIIScore3(pt []byte) int {
 	return score
 }
 
+// ASCIIScore4 : reward english letter frequency
+func ASCIIScore4(pt []byte) int {
+	//etaoinshrdlcumwfgypbvkjxqz
+	frequency := []byte("zqxjkvbpygfwmucldrhsnioate")
+
+	if len(pt) > 80 {
+		pt = pt[0:80] // truncate to 80 for performance
+	}
+
+	score := 0
+	for _, v := range pt {
+		score += bytes.IndexByte(frequency, v)
+	}
+	return score
+}
+
 // AttackSingleByteXOR : Attack single byte XOR cipher text
 // score can be ASCIIScore or ASCIIScoreEx
-func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byte, byte) {
+func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byte, byte, int) {
 	pb := make([]byte, len(cb))
 	pbWinner := make([]byte, len(cb))
 	winnerScore := 0
-	winner := byte(0)
+	winnerByte := byte(0)
 	for k := byte(32); k <= 126; k++ {
 		for i := range cb {
 			pb[i] = cb[i] ^ k
@@ -104,12 +121,11 @@ func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byt
 		s := score(pb)
 		if s >= winnerScore {
 			winnerScore = s
-			winner = k
+			winnerByte = k
 			copy(pbWinner, pb)
 
 			if verbose {
-				reg, _ := regexp.Compile("[^a-zA-Z0-9 ]")
-				fmt.Printf("\n %s score(%3d) = %s", string(winner), winnerScore, reg.ReplaceAllString(string(pbWinner), "*"))
+				fmt.Printf("\n %s score(%3d) = %s", string(winnerByte), winnerScore, ToSafeString(pbWinner))
 			}
 		}
 	}
@@ -117,7 +133,7 @@ func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byt
 		fmt.Printf("\n...")
 	}
 	if winnerScore == 0 {
-		return []byte{}, byte(0)
+		return []byte{}, byte(0), 0
 	}
-	return pbWinner, winner
+	return pbWinner, winnerByte, winnerScore
 }
