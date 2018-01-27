@@ -9,6 +9,7 @@ import (
 )
 
 //One of the 60-character strings in 4.txt file has been encrypted by single-character XOR.
+// Answer : key(5) : "Now that the party is jumping."
 
 // go test -v
 // go test
@@ -32,8 +33,8 @@ func TestAttackSingleXORFile(t *testing.T) {
 			return
 		}
 
-		// Only ASCIIScore4 worked :)
-		pb1, secret, score := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore4, false)
+		// Only ASCIIScore survived the test :)
+		pb1, secret, score := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore, false)
 
 		if score > winScore {
 			winScore = score

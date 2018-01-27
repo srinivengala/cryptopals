@@ -91,8 +91,8 @@ func ASCIIScore3(pt []byte) int {
 	return score
 }
 
-// ASCIIScore4 : reward english letter frequency
-func ASCIIScore4(pt []byte) int {
+// ASCIIScore 😎 : reward english letter frequency
+func ASCIIScore(pt []byte) int {
 	//etaoinshrdlcumwfgypbvkjxqz
 	frequency := []byte("zqxjkvbpygfwmucldrhsnioate")
 
@@ -108,16 +108,13 @@ func ASCIIScore4(pt []byte) int {
 }
 
 // AttackSingleByteXOR : Attack single byte XOR cipher text
-// score can be ASCIIScore or ASCIIScoreEx
+// score can be crytin.ASCIIScore4
 func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byte, byte, int) {
-	pb := make([]byte, len(cb))
 	pbWinner := make([]byte, len(cb))
 	winnerScore := 0
 	winnerByte := byte(0)
 	for k := byte(32); k <= 126; k++ {
-		for i := range cb {
-			pb[i] = cb[i] ^ k
-		}
+		pb := XOR(cb, []byte{k})
 		s := score(pb)
 		if s >= winnerScore {
 			winnerScore = s

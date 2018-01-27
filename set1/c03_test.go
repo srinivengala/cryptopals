@@ -23,7 +23,7 @@ func TestAttackSingleXOR(t *testing.T) {
 		return
 	}
 
-	// using ASCIIScore1
+	// using ASCIIScore1 : This scoring failed next test
 	pb1, secret1, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore1, false)
 
 	if len(pb1) == 0 {
@@ -33,8 +33,8 @@ func TestAttackSingleXOR(t *testing.T) {
 	t.Log("Plain text is : ", string(pb1))
 	t.Log("Secret byte is : ", string(secret1))
 
-	// using ASCIIScore2
-	pb2, secret2, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore2, false)
+	// using ASCIIScore : This is found best scoring algorithm as per next test
+	pb2, secret2, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore, true)
 
 	if len(pb2) == 0 {
 		t.Error("Could not find the XOR byte")
@@ -43,7 +43,7 @@ func TestAttackSingleXOR(t *testing.T) {
 	t.Log("Plain text is : ", string(pb2))
 	t.Log("Secret byte is : ", string(secret2))
 
-	// using ASCIIScore3
+	// using ASCIIScore3 : Failed but very close as per verbose output
 	pb3, secret3, _ := crytin.AttackSingleByteXOR(cb, crytin.ASCIIScore3, false)
 
 	if len(pb3) == 0 {

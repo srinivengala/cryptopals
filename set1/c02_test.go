@@ -26,7 +26,7 @@ func TestXOR(t *testing.T) {
 	t.Logf("Expected: 746865206b696420646f6e277420706c6179")
 	a, err := crytin.FromHex("1c0111001f010100061a024b53535009181c")
 	b, err := crytin.FromHex("686974207468652062756c6c277320657965")
-	x, err := crytin.XOR(a, b)
+	x := crytin.XOR(a, b)
 	xx := crytin.ToHex(x)
 	if err != nil || xx != expectedHex {
 		t.Error("Expected " + expectedHex + ",\n got " + xx)
