@@ -17,8 +17,8 @@ import (
 // http://www.math.cornell.edu/~mec/
 
 // ASCIIScore1 : reward frequent ascii chars
-func ASCIIScore1(pt []byte) int {
-	score := 0
+func ASCIIScore1(pt []byte) (score int) {
+	score = 0
 	if len(pt) > 80 {
 		pt = pt[0:80]
 	}
@@ -45,8 +45,8 @@ func ASCIIScore1(pt []byte) int {
 }
 
 // ASCIIScore2 : reward "ETAOIN SHRDLU CMFWYP" the most used characters
-func ASCIIScore2(pt []byte) int {
-	score := 0
+func ASCIIScore2(pt []byte) (score int) {
+	score = 0
 	shrdlu := []byte{0x45, 0x54, 0x41, 0x4F, 0x49, 0x4E, //ETAOIN
 		0x43, 0x4D, 0x46, 0x57, 0x59, 0x50, //CMFWYP
 		0x53, 0x48, 0x52, 0x44, 0x4C, 0x55} //SHRDLU
@@ -72,8 +72,8 @@ func ASCIIScore2(pt []byte) int {
 }
 
 // ASCIIScore3 : reward space, period and comma
-func ASCIIScore3(pt []byte) int {
-	score := 0
+func ASCIIScore3(pt []byte) (score int) {
+	score = 0
 	selectChars := []byte{32, 46, 44, 39, 34}
 
 	if len(pt) > 80 {
@@ -92,7 +92,8 @@ func ASCIIScore3(pt []byte) int {
 }
 
 // ASCIIScore 😎 : reward english letter frequency
-func ASCIIScore(pt []byte) int {
+// punish if not from frequency letters
+func ASCIIScore(pt []byte) (score int) {
 	//etaoinshrdlcumwfgypbvkjxqz
 	frequency := []byte("zqxjkvbpygfwmucldrhsnioate")
 
@@ -100,37 +101,39 @@ func ASCIIScore(pt []byte) int {
 		pt = pt[0:80] // truncate to 80 for performance
 	}
 
-	score := 0
+	score = 0
 	for _, v := range pt {
-		score += bytes.IndexByte(frequency, v)
+		score += bytes.IndexByte(frequency, v) // IndexByte returns -1 if not present
 	}
 	return score
 }
 
+// Lesson learned for scoring algorithms : reward desired behavior and punish undesired behavior
+
 // AttackSingleByteXOR : Attack single byte XOR cipher text
-// score can be crytin.ASCIIScore4
-func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) ([]byte, byte, int) {
-	pbWinner := make([]byte, len(cb))
-	winnerScore := 0
-	winnerByte := byte(0)
+// score can be crytin.ASCIIScore
+func AttackSingleByteXOR(cb []byte, score func([]byte) int, verbose bool) (pbWinner []byte, winnerKey byte, winnerScore int) {
+	pbWinner = make([]byte, len(cb))
+	winnerScore = 0
+	winnerKey = byte(0)
 	for k := byte(32); k <= 126; k++ {
 		pb := XOR(cb, []byte{k})
 		s := score(pb)
 		if s >= winnerScore {
 			winnerScore = s
-			winnerByte = k
+			winnerKey = k
 			copy(pbWinner, pb)
 
 			if verbose {
-				fmt.Printf("\n %s score(%3d) = %s", string(winnerByte), winnerScore, ToSafeString(pbWinner))
+				fmt.Printf("\n %s score(%3d) = %s", string(winnerKey), winnerScore, ToSafeString(pb))
 			}
 		}
 	}
 	if verbose {
-		fmt.Printf("\n...")
+		fmt.Printf("\n...\n")
 	}
 	if winnerScore == 0 {
 		return []byte{}, byte(0), 0
 	}
-	return pbWinner, winnerByte, winnerScore
+	return pbWinner, winnerKey, winnerScore
 }
