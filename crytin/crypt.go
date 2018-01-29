@@ -160,7 +160,7 @@ func DecryptAesEcb(cb, key []byte) ([]byte, error) {
 		c.Decrypt(pb[i:i+ks], cb[i:i+ks])
 	}
 
-	//FIXME: padding of pb
+	RemovePadding(&pb)
 
 	return pb, nil
 }
@@ -174,16 +174,58 @@ func EncryptAesEcb(pb, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	cbLen := ((len(pb) + 7) / 8) * 8
-	cb := make([]byte, cbLen)
-	pad := make([]byte, cbLen-len(pb))
-	if len(pb) < cbLen {
-		pb = append(pb[:], pad[:]...) //FIXME: padding
-	}
+	PKCS7Pad(&pb)
+	cb := make([]byte, len(pb))
 
 	// encrypt block by block
 	for i := 0; i < len(pb); i += ks {
 		c.Encrypt(cb[i:i+ks], pb[i:i+ks])
 	}
 	return cb, nil
+}
+
+//bit padding: 100000
+//
+//Zero padding : 00 00 00 00
+//ISO/IEC 7816-4: 80 00 00 00 (equivalent to bit padding)
+//ANSI X.923: 00 00 00 04 (01, 00 02, 00 00 03)
+//ISO 10126 : 81 A6 23 04 (01, 1 random + 02,, 3 random + 04)
+//PKCS7     : 04 04 04 04 (01, 2 bytes of 02,, 4 bytes of 04)
+
+// PKCS7Pad : PKCS7 padding. RFC-5652
+func PKCS7Pad(pb *[]byte) {
+	pbLen := uint(len(*pb))
+	fullLen := ((pbLen + 7) / 8) * 8
+	padLen := fullLen - pbLen
+
+	// if no need for padding but
+	// data looks like it has padding
+	if padLen == 0 && (*pb)[pbLen-1] <= 8 {
+		padLen = 8
+		fullLen += 8
+	}
+	
+	if (padLen <= 0) {return;}
+
+	PKCS7Padding(pb, fullLen)
+}
+
+// PKCS7Padding : PKCS7 padding. RFC-5652
+func PKCS7Padding(pb *[]byte, fullLength uint) {
+	padLen := fullLength - uint(len(*pb))
+	
+	pad := make([]byte, padLen)
+	for i:= range pad {
+		pad[i]= byte(padLen) 
+	}
+
+	*pb = append((*pb)[:], pad[:]...)
+}
+
+// RemovePadding : Removes padding
+//  works for : ANSI X.923, ISO 10126, PKCS7
+func RemovePadding(pb *[]byte) {
+	b := (*pb)[len(*pb)-1]
+	if b > 8 {return} //check valid pad char
+	*pb = (*pb)[:len(*pb)-int(b)]	
 }

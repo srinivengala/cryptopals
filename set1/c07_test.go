@@ -27,14 +27,15 @@ func TestDecryptAESECBMode(t *testing.T) {
 		t.Error(err)
 	}
 
+	t.Logf("Plain text: %s\n", string(pb))
+
 	cb2, err := crytin.EncryptAesEcb(pb, key)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if bytes.Compare(cb[:], cb2[:]) != 0 {
-		t.Error("Re encrypted text did not match original encrypted text")
+	if !bytes.Equal(cb[:], cb2[:]) {
+		t.Errorf("padding : %s and %s", crytin.ToHex(cb[len(cb)-8:]), crytin.ToHex(cb2[len(cb2)-8:]))
 	}
 
-	t.Logf("Plain text: %s\n", string(pb))
 }
