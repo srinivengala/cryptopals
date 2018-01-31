@@ -61,7 +61,7 @@ func XOR(b1, b2 []byte) []byte {
 
 // ToSafeString : Convert to safe printable string
 func ToSafeString(b []byte) string {
-	reg, _ := regexp.Compile("[^a-zA-Z0-9 ]")
+	reg, _ := regexp.Compile("[^a-zA-Z0-9@=&% ]")
 	return reg.ReplaceAllString(string(b), ".")
 }
 
@@ -147,6 +147,7 @@ func Transpose(cb []byte, blockSize uint) (tr [][]byte) {
 func DecryptAesEcb(cb, key []byte) ([]byte, error) {
 	// key size 16, 24, or 32 bytes to select
 	//     AES-128, AES-192, or AES-256
+	PKCS7PadKey(&key, []uint{16, 24, 32})
 	ks := len(key)
 
 	c, err := aes.NewCipher(key)
@@ -156,7 +157,7 @@ func DecryptAesEcb(cb, key []byte) ([]byte, error) {
 
 	pb := make([]byte, len(cb))
 	// decrypt block by block
-	for i := 0; i < len(cb); i += ks {
+	for i := 0; i+ks <= len(cb); i += ks {
 		c.Decrypt(pb[i:i+ks], cb[i:i+ks])
 	}
 
@@ -167,21 +168,78 @@ func DecryptAesEcb(cb, key []byte) ([]byte, error) {
 
 // EncryptAesEcb : AES-ECB mode symmetric cipher to encrypt
 // key size must be 16, 24 or 32 bytes
+//
+// pb[i], key => enc() => cb[i]
+// cb[i], key => dec() => pb[i]
+// Note: you can see penguins thru ECB mode
+// Attacks: replay
 func EncryptAesEcb(pb, key []byte) ([]byte, error) {
+	PKCS7PadKey(&key, []uint{16, 24, 32})
 	ks := len(key)
 	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
 
-	PKCS7Pad(&pb)
+	PKCS7Pad(&pb, uint(ks))
 	cb := make([]byte, len(pb))
 
 	// encrypt block by block
-	for i := 0; i < len(pb); i += ks {
+	for i := 0; i+ks <= len(pb); i += ks {
 		c.Encrypt(cb[i:i+ks], pb[i:i+ks])
 	}
 	return cb, nil
+}
+
+// EncryptAesCbc : AES-CBC mode symmetric cipher to encrypt
+// key size must be 16, 24 or 32 bytes
+//
+// xor(pb[i], cb[i-1]), key => enc() => cb[i]
+// cb[i], key => xor(dec(), cb[i-1]) => pb[i]
+//
+// decryption can be parallelized (just need cb[i-1], cb[i], key)
+// wrong IV corrupts current block but next block will not get affected
+// A bit flipped in cipher text will cause corresponding bit flipped in plaintext of next block
+// Attacks: padding oracle attacks such as POODLE
+func EncryptAesCbc(pb, key, iv []byte) ([]byte, error) {
+	PKCS7PadKey(&key, []uint{16, 24, 32})
+	ks := len(key)
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	PKCS7Pad(&pb, uint(ks))
+	cb := make([]byte, len(pb))
+
+	// encrypt block by block
+	for i := 0; i+ks <= len(pb); i += ks {
+		c.Encrypt(cb[i:i+ks], XOR(pb[i:i+ks], iv))
+		iv = cb[i : i+ks] // iv for next block
+	}
+	return cb, nil
+}
+
+// DecryptAesCbc : AES-CBC mode symmetric cipher to decrypt
+// xor(pb[i], cb[i-1]), key => enc() => cb[i]
+// cb[i], key => xor(dec(), cb[i-1]) => pb[i]
+func DecryptAesCbc(cb, key, iv []byte) ([]byte, error) {
+	PKCS7PadKey(&key, []uint{16, 24, 32})
+	ks := len(key)
+	c, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	pb := make([]byte, len(cb))
+	dec := make([]byte, ks)
+	// decrypt block by block
+	for i := 0; i+ks <= len(pb); i += ks {
+		c.Decrypt(dec, cb[i:i+ks])
+		copy(pb[i:i+ks], XOR(dec, iv))
+		iv = cb[i : i+ks] // iv for next block
+	}
+	RemovePadding(&pb)
+	return pb, nil
 }
 
 //bit padding: 100000
@@ -193,9 +251,9 @@ func EncryptAesEcb(pb, key []byte) ([]byte, error) {
 //PKCS7     : 04 04 04 04 (01, 2 bytes of 02,, 4 bytes of 04)
 
 // PKCS7Pad : PKCS7 padding. RFC-5652
-func PKCS7Pad(pb *[]byte) {
+func PKCS7Pad(pb *[]byte, blockSize uint) {
 	pbLen := uint(len(*pb))
-	fullLen := ((pbLen + 7) / 8) * 8
+	fullLen := ((pbLen + (blockSize - 1)) / blockSize) * blockSize
 	padLen := fullLen - pbLen
 
 	// if no need for padding but
@@ -204,8 +262,10 @@ func PKCS7Pad(pb *[]byte) {
 		padLen = 8
 		fullLen += 8
 	}
-	
-	if (padLen <= 0) {return;}
+
+	if padLen <= 0 {
+		return
+	}
 
 	PKCS7Padding(pb, fullLen)
 }
@@ -213,19 +273,39 @@ func PKCS7Pad(pb *[]byte) {
 // PKCS7Padding : PKCS7 padding. RFC-5652
 func PKCS7Padding(pb *[]byte, fullLength uint) {
 	padLen := fullLength - uint(len(*pb))
-	
+
 	pad := make([]byte, padLen)
-	for i:= range pad {
-		pad[i]= byte(padLen) 
+	for i := range pad {
+		pad[i] = byte(padLen)
 	}
 
 	*pb = append((*pb)[:], pad[:]...)
+}
+
+// PKCS7PadKey : restricts key to one of the sizes
+func PKCS7PadKey(pb *[]byte, sizes []uint) {
+	pbLen := uint(len(*pb))
+	if pbLen > sizes[len(sizes)-1] {
+		*pb = (*pb)[:sizes[len(sizes)-1]]
+		return
+	}
+	for _, size := range sizes {
+		if pbLen == size {
+			return
+		}
+		if pbLen < size {
+			PKCS7Padding(pb, size)
+			return
+		}
+	}
 }
 
 // RemovePadding : Removes padding
 //  works for : ANSI X.923, ISO 10126, PKCS7
 func RemovePadding(pb *[]byte) {
 	b := (*pb)[len(*pb)-1]
-	if b > 8 {return} //check valid pad char
-	*pb = (*pb)[:len(*pb)-int(b)]	
+	if b > 0x0F {
+		return
+	} //check valid pad char
+	*pb = (*pb)[:len(*pb)-int(b)]
 }
