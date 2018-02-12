@@ -55,43 +55,71 @@ func oracle(cb []byte) ([]byte, error) {
 //  for map compare keys
 func bruteForceX(prefix []byte) map[string]byte {
 	m := make(map[string]byte)
-	for i := byte(0); i <= 128; i++ {
+	// cheat: 126 optimized for english.
+	//  for binary use 256
+	for i := byte(0); i < 126; i++ {
 		cb := append(prefix, i)
 		resultBytes, _ := oracle(cb)
-		m[string(resultBytes)] = i
+		m[crytin.ToHex(resultBytes)] = i
 	}
 	return m
 }
 
-func TestECBByteAtATimeDecrypt(t *testing.T) {
-	cb, _ := crytin.FromBase64String(`Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg
-		aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq
-		dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg
-		YnkK`)
+func TestAttackECBByteAtATimeDecrypt(t *testing.T) {
+	cb, _ := crytin.FromBase64String(
+		`Um9sbGluJyBpbiBteSA1LjAKV2l0aCBteSByYWctdG9wIGRvd24gc28gbXkg
+aGFpciBjYW4gYmxvdwpUaGUgZ2lybGllcyBvbiBzdGFuZGJ5IHdhdmluZyBq
+dXN0IHRvIHNheSBoaQpEaWQgeW91IHN0b3A/IE5vLCBJIGp1c3QgZHJvdmUg
+YnkK`)
+	//Rollin' in my 5.0
+	//With my rag-top down so my hair can blow
+	//The girlies on standby waving just to say hi
+	//Did you stop? No, I just drove by
+
+	//append some padding to be able to decrypt last block
+	pad := ((len(cb)+ks-1)/ks)*ks - len(cb)
+	cb = append(cb, make([]byte, pad)...)
+
+	decrypted := make([]byte, 0, len(cb))
 	// for each block
 	currBlock := 0
-	ptb := make([]byte, 0)
+	for ; currBlock < len(cb); currBlock += ks {
+		ptb := make([]byte, 0)
 
-	// for each byte in currBlock
-	for bn := 0; bn < ks; bn++ {
-		ab := bytes.Repeat([]byte("A"), ks-len(ptb)-1)
-		ab = append(ab, ptb...)
-		m := bruteForceX(ab)
-		t.Log("\n Bruteforce complete for block", string(ab))
+		// for each byte in currBlock
+		for bn := 0; bn < ks; bn++ {
+			ab := bytes.Repeat([]byte("A"), ks-len(ptb)-1)
+			ab = append(ab, ptb...)
+			m := bruteForceX(ab)
+			t.Log("\n Lookup table complete for block :", crytin.ToSafeString(ab))
 
-		ab = append(ab, cb[bn:]...)
-		//t.Log("\n", crytin.ToHex(ab)[currBlock:currBlock+(ks*2)])
-		pb, err := oracle(ab)
-		if err != nil {
-			t.Error(err)
-		}
-		//t.Log("\n ", crytin.ToHex(pb[currBlock:currBlock+ks]))
-		if v, ok := m[string(pb[currBlock:currBlock+ks])]; ok {
-			ptb = append(ptb, v)
-			//t.Log("\n The letter is : ", string(ptb))
-		} else {
-			ptb = append(ptb, 46) //"."
-			//t.Error("\n Not found in bruteforce lookup map")
+			oab := make([]byte, 0)
+			oab = append(oab, cb[0:currBlock]...)
+			oab = append(oab, ab...)
+			oab = append(oab, cb[currBlock+bn:]...)
+			// append shifted len to keep oab constant length
+			oab = append(oab, make([]byte, bn+1)...)
+
+			//t.Log("\n=>", crytin.ToHex(oab[currBlock:currBlock+ks]))
+			//t.Log("\n=>",crytin.ToHex(oab))
+			opb, err := oracle(oab)
+			if err != nil {
+				t.Error(err)
+			}
+			lookup := crytin.ToHex(opb[currBlock : currBlock+ks])
+			if v, ok := m[lookup]; ok {
+				ptb = append(ptb, v)
+				//t.Log("\n The letter is : ", string(ptb))
+			} else {
+				ptb = append(ptb, 46) //"."
+				//t.Error("\n Not found in bruteforce lookup map")
+			}
+			if bn == ks-1 {
+				decrypted = append(decrypted, ptb...)
+				t.Log("\nptb=>", crytin.ToSafeString(ptb), "\n")
+			}
 		}
 	}
+	decrypted = decrypted[0 : len(decrypted)-pad]
+	t.Log("\nDecrypted: ", string(decrypted))
 }
