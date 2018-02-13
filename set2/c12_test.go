@@ -36,6 +36,64 @@ import (
 // AAAAAAse cb[currBlock+2] => oracle => pt => map[pt] => say "c"
 //
 
+// Funda:
+//
+// Brute force last byte of block by using known prefix.
+//    Known prefix is : (1.) at Insertion point or first block known text
+//                                   (Known text can be anything, we used A's).
+//                      (ii) Next blocks: decrypted text till the byte X).
+// By decreasing the prefix length, effectively slides the block right.
+//                                  or in other words
+//                                  shifts the bytes left into the block.
+// Brute force last byte of the slided block.
+//
+// Correlate the bruteforce cipher blocks with brute force bytes
+// Compare actual result with bruteforce result to get the brute force byte
+//      for current block shift
+// to do block shift we just inserted A's while getting acutal result
+
+// AAAAAAAAAAAAAAAX
+// AAAAAAAAAAAAAARX
+// AAAAAAAAAAAAARoX
+// AAAAAAAAAAAARolX
+// AAAAAAAAAAARollX
+// AAAAAAAAAARolliX
+// AAAAAAAAARollinX
+// AAAAAAAARollin.X
+// AAAAAAARollin. X
+// AAAAAARollin. iX
+// AAAAARollin. inX
+// AAAARollin. in X
+// AAARollin. in mX
+// AARollin. in myX
+// ARollin. in my X
+// Rollin. in my 5X
+// AAAAAAAAAAAAAAARollin. in my 5.X   <= we know text till X "the oracle will place"
+//                                          with given A's inserted
+// AAAAAAAAAAAAAARollin. in my 5.0X
+// AAAAAAAAAAAAARollin. in my 5.0.X
+// AAAAAAAAAAAARollin. in my 5.0.WX
+// AAAAAAAAAAARollin. in my 5.0.WiX
+// AAAAAAAAAARollin. in my 5.0.WitX
+// AAAAAAAAARollin. in my 5.0.WithX
+// AAAAAAAARollin. in my 5.0.With X
+// AAAAAAARollin. in my 5.0.With mX
+// AAAAAARollin. in my 5.0.With myX
+// AAAAARollin. in my 5.0.With my X
+// AAAARollin. in my 5.0.With my rX
+// AAARollin. in my 5.0.With my raX
+// AARollin. in my 5.0.With my ragX
+// ARollin. in my 5.0.With my rag.X
+// Rollin. in my 5.0.With my rag.tX
+//                ^
+//                |
+
+// Moral : if you let me insert text that will use ECB mode,
+//         all unknown bytes to the right of insertion point
+//         I will know them
+
+// Remedy : Pad inputs to fixed length
+
 const ks = 16
 
 var unknownKey = [ks]byte{}
@@ -76,7 +134,6 @@ func bruteForceX(prefix []byte, insertPoint int, currentBlock int) map[string]by
 }
 
 func TestAttackECBByteAtATimeDecrypt(t *testing.T) {
-
 	cb, _ := oracle([]byte{}, 0)
 	decrypted := make([]byte, 0)
 	// for each block
@@ -87,21 +144,22 @@ func TestAttackECBByteAtATimeDecrypt(t *testing.T) {
 		// for each byte in currBlock
 		for bn := 0; bn < ks; bn++ {
 			ab := bytes.Repeat([]byte("A"), ks-1-len(ptb))
-			abptb := append(ab, ptb...)
-			m := bruteForceX(abptb, currBlock, currBlock)
-			t.Log("\n Lookup table complete for block :", crytin.ToSafeString(abptb))
+			abptb := append(ab, decrypted...)
+			abptb = append(abptb, ptb...)
+			m := bruteForceX(abptb, 0, currBlock)
+			t.Log("\n Bruteforced block :", crytin.ToSafeString(abptb))
 
 			//t.Log("\n=>", crytin.ToHex(oab[currBlock:currBlock+ks]))
 			//t.Log("\n=>",crytin.ToHex(oab))
-			opb, err := oracle(ab, currBlock)
+			ocb, err := oracle(ab, 0)
 			if err != nil {
 				t.Error(err)
 			}
 
-			// append shifted len to keep oab constant length
-			opb = append(opb, make([]byte, bn+1)...)
+			// append shifted len to keep ocb constant length
+			ocb = append(ocb, make([]byte, bn+1)...)
 
-			lookup := crytin.ToHex(opb[currBlock : currBlock+ks])
+			lookup := crytin.ToHex(ocb[currBlock : currBlock+ks])
 			if v, ok := m[lookup]; ok {
 				ptb = append(ptb, v)
 				//t.Log("\n The letter is : ", string(ptb))
@@ -115,6 +173,7 @@ func TestAttackECBByteAtATimeDecrypt(t *testing.T) {
 			}
 		}
 	}
-	//decrypted = decrypted[0 : len(decrypted)-pad]
+	pad := ((len(cb)+ks-1)/ks)*ks - len(cb)
+	decrypted = decrypted[0 : len(decrypted)-pad]
 	t.Log("\nDecrypted: ", string(decrypted))
 }
